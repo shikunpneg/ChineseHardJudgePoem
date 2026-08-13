@@ -1,0 +1,13 @@
+{
+  "seed": 20260812,
+  "n_samples": 300,
+  "random_vs_pool": {
+    "mean": 0.0001471057406223708,
+    "median": 0.0
+  },
+  "real_vs_pool": {
+    "mean": 0.0036287239682075913,
+    "median": 0.002658526463220898
+  },
+  "note": "random_vs_pool 为下界；real_vs_pool 为真实诗与同池他诗的自相似参考；生成模型 sim_pool 应落于二者之间"
+}

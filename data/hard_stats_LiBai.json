@@ -1,0 +1,13 @@
+{
+  "group": "LiBai",
+  "count": 1250,
+  "jaccard_mean": 0.0061,
+  "jaccard_median": 0.0,
+  "jaccard_max": 0.156,
+  "jaccard_over_0_4": 0.0,
+  "jaccard_over_0_6": 0.0,
+  "cosine_mean": 0.023,
+  "pool_mean": 0.0026,
+  "pool_median": 0.0024,
+  "elapsed_sec": 1987
+}

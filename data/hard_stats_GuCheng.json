@@ -1,0 +1,13 @@
+{
+  "group": "GuCheng",
+  "count": 1250,
+  "jaccard_mean": 0.0273,
+  "jaccard_median": 0.0146,
+  "jaccard_max": 1.0,
+  "jaccard_over_0_4": 0.0072,
+  "jaccard_over_0_6": 0.0064,
+  "cosine_mean": 0.067,
+  "pool_mean": 0.0099,
+  "pool_median": 0.0101,
+  "elapsed_sec": 3322
+}

@@ -1,0 +1,13 @@
+{
+  "group": "Haizi",
+  "count": 1250,
+  "jaccard_mean": 0.0316,
+  "jaccard_median": 0.0153,
+  "jaccard_max": 1.0,
+  "jaccard_over_0_4": 0.004,
+  "jaccard_over_0_6": 0.0016,
+  "cosine_mean": 0.0996,
+  "pool_mean": 0.0116,
+  "pool_median": 0.0116,
+  "elapsed_sec": 2038
+}
