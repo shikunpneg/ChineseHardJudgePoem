@@ -1,0 +1,75 @@
+Fetching 32 files:   0%|          | 0/32 [00:00<?, ?it/s]Fetching 32 files:   3%|▎         | 1/32 [00:00<00:14,  2.12it/s]Fetching 32 files:   6%|▋         | 2/32 [00:00<00:08,  3.64it/s]Fetching 32 files:  16%|█▌        | 5/32 [00:00<00:02,  9.22it/s]Fetching 32 files:  22%|██▏       | 7/32 [00:00<00:02, 11.55it/s]Fetching 32 files:  25%|██▌       | 8/32 [00:03<00:11,  2.02it/s]
+Traceback (most recent call last):
+  File "<string>", line 3, in <module>
+    p = snapshot_download(repo_id='Qwen/Qwen3.8-27B', local_dir='/root/models/Qwen3.8-27B')
+  File "/root/miniconda3/envs/myconda/lib/python3.13/site-packages/huggingface_hub/utils/_validators.py", line 88, in _inner_fn
+    return fn(*args, **kwargs)
+  File "/root/miniconda3/envs/myconda/lib/python3.13/site-packages/huggingface_hub/_snapshot_download.py", line 522, in snapshot_download
+    hf_thread_map(
+    ~~~~~~~~~~~~~^
+        _inner_hf_hub_download,
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        tqdm_class=tqdm_class,
+        ^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/root/miniconda3/envs/myconda/lib/python3.13/site-packages/huggingface_hub/utils/tqdm.py", line 441, in hf_thread_map
+    results[future_to_index[future]] = future.result()
+                                       ~~~~~~~~~~~~~^^
+  File "/root/miniconda3/envs/myconda/lib/python3.13/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ~~~~~~~~~~~~~~~~~^^
+  File "/root/miniconda3/envs/myconda/lib/python3.13/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/root/miniconda3/envs/myconda/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/root/miniconda3/envs/myconda/lib/python3.13/site-packages/huggingface_hub/_snapshot_download.py", line 502, in _inner_hf_hub_download
+    hf_hub_download(  # type: ignore
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+        repo_id,
+        ^^^^^^^^
+    ...<14 lines>...
+        dry_run=dry_run,
+        ^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/root/miniconda3/envs/myconda/lib/python3.13/site-packages/huggingface_hub/utils/_validators.py", line 88, in _inner_fn
+    return fn(*args, **kwargs)
+  File "/root/miniconda3/envs/myconda/lib/python3.13/site-packages/huggingface_hub/file_download.py", line 998, in hf_hub_download
+    return _hf_hub_download_to_local_dir(
+        # Destination
+    ...<16 lines>...
+        dry_run=dry_run,
+    )
+  File "/root/miniconda3/envs/myconda/lib/python3.13/site-packages/huggingface_hub/file_download.py", line 1457, in _hf_hub_download_to_local_dir
+    _download_to_tmp_and_move(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        incomplete_path=paths.incomplete_path(etag),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<8 lines>...
+        tqdm_class=tqdm_class,
+        ^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/root/miniconda3/envs/myconda/lib/python3.13/site-packages/huggingface_hub/file_download.py", line 1960, in _download_to_tmp_and_move
+    xet_get(
+    ~~~~~~~^
+        incomplete_path=tmp_path,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+        tqdm_class=tqdm_class,
+        ^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/root/miniconda3/envs/myconda/lib/python3.13/site-packages/huggingface_hub/file_download.py", line 565, in xet_get
+    with session.new_file_download_group(
+         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        token_refresh_url=xet_file_data.refresh_route,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        progress_callback=progress.update_progress,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ) as group:
+    ^
+RuntimeError: Task error: File reconstruction error: CAS Client Error: Request error: HTTP status client error (401 Unauthorized), domain: https://cas-server.xethub.hf.co/v2/reconstructions/ea6d40067bf102178c2e666278354066fe975f039278ee54e3db90de012bbe34

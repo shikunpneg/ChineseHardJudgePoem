@@ -1,0 +1,9 @@
+{
+  "model": "Qwen3.8-27B+KTO-Haizi",
+  "adapter": "/root/poetry-hard/saves/kto-Haizi-Haizi",
+  "count": 250,
+  "jaccard_mean": 0.1297,
+  "cosine_mean": 0.1873,
+  "pool_mean": 0.0127,
+  "elapsed_sec": 2632
+}

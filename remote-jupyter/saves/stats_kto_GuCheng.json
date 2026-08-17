@@ -1,0 +1,9 @@
+{
+  "model": "Qwen3.8-27B+KTO-GuCheng",
+  "adapter": "/root/poetry-hard/saves/kto-GuCheng-GuCheng",
+  "count": 250,
+  "jaccard_mean": 0.1951,
+  "cosine_mean": 0.2415,
+  "pool_mean": 0.0108,
+  "elapsed_sec": 2355
+}

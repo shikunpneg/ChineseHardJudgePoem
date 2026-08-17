@@ -1,0 +1,9 @@
+{
+  "model": "Qwen3.8-27B+KTO-LiBai",
+  "adapter": "/root/poetry-hard/saves/kto-LiBai-LiBai",
+  "count": 200,
+  "jaccard_mean": 0.0028,
+  "cosine_mean": 0.009,
+  "pool_mean": 0.0026,
+  "elapsed_sec": 1554
+}
