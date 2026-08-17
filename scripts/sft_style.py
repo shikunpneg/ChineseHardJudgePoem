@@ -45,6 +45,7 @@ def main():
     ap.add_argument("--lr", type=float, default=2e-4)
     ap.add_argument("--lora-r", type=int, default=16)
     ap.add_argument("--lora-alpha", type=int, default=32)
+    ap.add_argument("--resume-adapter", default=None, help="已有 LoRA adapter 目录（继续增强微调）")
     ap.add_argument("--batch-size", type=int, default=2)
     ap.add_argument("--grad-accum", type=int, default=8)
     ap.add_argument("--max-len", type=int, default=768)
@@ -86,6 +87,11 @@ def main():
         task_type="CAUSAL_LM",
     )
     model = get_peft_model(model, lora_config)
+    if args.resume_adapter and os.path.isdir(args.resume_adapter):
+        from peft import PeftModel as _PeftModel
+        # 已有 adapter 继续训练：加载原 adapter，保持可训练
+        model = _PeftModel.from_pretrained(model, args.resume_adapter, is_trainable=True)
+        print(f"[{args.style}] resumed from adapter: {args.resume_adapter}", flush=True)
     trainable, total = model.get_nb_trainable_parameters()
     print(f"[{args.style}] trainable {trainable/1e6:.2f}M / {total/1e9:.2f}B", flush=True)
 

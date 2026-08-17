@@ -1,16 +1,17 @@
 # -*- coding: utf-8 -*-
-"""Qwen3.8-27B 三诗人风格 DPO 后训练（基于 SFT adapter）。
+"""Qwen3.8-27B 三诗人风格 KTO 后训练（基于 SFT adapter，单模型，替代 DPO 双模型解决 OOM）。
 
 用法:
-  python dpo_style.py --style GuCheng --train data/annotations_dpo_gen_format.jsonl \
+  python kto_style.py --style GuCheng --train data/annotations_dpo_gen_format.jsonl \
       --base /root/models/Qwen3.8-27B --adapter /root/poetry-hard/saves/sft-GuCheng-ann \
-      --out /root/poetry-hard/saves/dpo-GuCheng --epochs 3
+      --out /root/poetry-hard/saves/kto-GuCheng --epochs 3
 
-DPO 偏好：chosen=人类标注一致的真实诗歌，rejected=人类标注一致的非诗文本。
+KTO 偏好：desirable=人类标注一致的真实诗歌，undesirable=人类标注一致的非诗文本。
 数据格式（annotations_dpo_gen_format.jsonl）：
   conversations: [system(风格人设), human(创作请求)]
   chosen: 真实诗歌
   rejected: 非诗文本
+每行展开为两条 KTO 样本：prompt+chosen(label=True)、prompt+rejected(label=False)。
 """
 import argparse
 import json
@@ -30,23 +31,21 @@ def load_rows(path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--style", required=True, help="GuCheng / Haizi / LiBai")
-    ap.add_argument("--train", required=True, help="DPO 偏好数据 jsonl")
+    ap.add_argument("--train", required=True, help="KTO 偏好数据 jsonl（chosen/rejected 格式）")
     ap.add_argument("--base", default="/root/models/Qwen3.8-27B")
     ap.add_argument("--adapter", required=True, help="SFT LoRA adapter 目录")
-    ap.add_argument("--out", default="/root/poetry-hard/saves/dpo")
+    ap.add_argument("--out", default="/root/poetry-hard/saves/kto")
     ap.add_argument("--epochs", type=int, default=3)
     ap.add_argument("--lr", type=float, default=5e-5)
-    ap.add_argument("--lora-r", type=int, default=16)
-    ap.add_argument("--lora-alpha", type=int, default=32)
-    ap.add_argument("--batch-size", type=int, default=1)
-    ap.add_argument("--grad-accum", type=int, default=8)
+    ap.add_argument("--batch-size", type=int, default=2)
+    ap.add_argument("--grad-accum", type=int, default=4)
     ap.add_argument("--beta", type=float, default=0.1)
     ap.add_argument("--max-len", type=int, default=256)
     args = ap.parse_args()
 
     os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
     from transformers import AutoModelForCausalLM, AutoProcessor, BitsAndBytesConfig, TrainingArguments, TrainerCallback
-    from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training, PeftModel
+    from peft import PeftModel, prepare_model_for_kbit_training
 
     rows = load_rows(args.train)
     # 只保留该风格的样本（meta.style 或按 conversations[0] 匹配风格人设）
@@ -55,7 +54,6 @@ def main():
         meta = r.get("meta", {}) or {}
         style = meta.get("style", "")
         if not style:
-            # fallback：按 conversations[0] 中的诗人名判断
             sysv = (r.get("conversations") or [{}])[0].get("value", "")
             if "顾城" in sysv:
                 style = "GuCheng"
@@ -66,8 +64,8 @@ def main():
         if style == args.style:
             filtered.append(r)
     rows = filtered
-    print(f"[{args.style}] DPO rows: {len(rows)}", flush=True)
-    assert rows, f"style {args.style} 无 DPO 数据"
+    print(f"[{args.style}] KTO rows: {len(rows)}", flush=True)
+    assert rows, f"style {args.style} 无 KTO 数据"
 
     processor = AutoProcessor.from_pretrained(args.base, trust_remote_code=True)
     tokenizer = processor.tokenizer
@@ -81,34 +79,24 @@ def main():
         bnb_4bit_quant_type="nf4",
         bnb_4bit_use_double_quant=True,
     )
-    # Policy: base + SFT LoRA
+    # Policy: base + SFT LoRA（可训练）。KTO 单模型，无 ref 模型，显存约为 DPO 双模型的一半。
+    # 注意：必须先 prepare_model_for_kbit_training 再加载 PeftModel，否则 LoRA 参数会被冻结（trainable=0）。
     model = AutoModelForCausalLM.from_pretrained(
         args.base, trust_remote_code=True,
         dtype=torch.bfloat16, device_map="auto",
         quantization_config=quant_cfg,
     )
+    model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
     if os.path.isdir(args.adapter):
         model = PeftModel.from_pretrained(model, args.adapter, is_trainable=True)
-    model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
+    trainable, total = model.get_nb_trainable_parameters()
+    print(f"[{args.style}] trainable {trainable/1e6:.2f}M / {total/1e9:.2f}B", flush=True)
+    assert trainable > 0, "LoRA 参数未被启用训练，请检查加载顺序"
 
-    # Reference: base + SFT LoRA（冻结）。双 4bit 模型共约 35GB，需配合 max_length=256
-    ref_model = AutoModelForCausalLM.from_pretrained(
-        args.base, trust_remote_code=True,
-        dtype=torch.bfloat16, device_map="auto",
-        quantization_config=quant_cfg,
-        low_cpu_mem_usage=True,
-    )
-    if os.path.isdir(args.adapter):
-        ref_model = PeftModel.from_pretrained(ref_model, args.adapter, is_trainable=False)
-    for p in ref_model.parameters():
-        p.requires_grad = False
-    ref_model.eval()
-
-    # 构造 DPO dataset（trl 原生 prompt/chosen/rejected 文本格式）
+    # 构造 KTO dataset（trl 原生 prompt/completion/label 文本格式）
     from datasets import Dataset
 
     def build_prompt(conv):
-        # conversations: [system, human]
         msgs = []
         for m in conv:
             if m.get("from") == "system":
@@ -118,14 +106,25 @@ def main():
         return processor.apply_chat_template(
             msgs, tokenize=False, add_generation_prompt=True, enable_thinking=False)
 
-    data = {
-        "prompt": [build_prompt(r["conversations"]) for r in rows],
-        "chosen": [r["chosen"]["value"] if isinstance(r.get("chosen"), dict) else r["chosen"] for r in rows],
-        "rejected": [r["rejected"]["value"] if isinstance(r.get("rejected"), dict) else r["rejected"] for r in rows],
-    }
-    ds = Dataset.from_dict(data)
-    print(f"[{args.style}] dataset ready: {len(ds)}", flush=True)
-    print("example prompt:", data["prompt"][0][:120], flush=True)
+    def completion_value(c):
+        return c["value"] if isinstance(c, dict) else c
+
+    prompts, completions, labels = [], [], []
+    for r in rows:
+        p = build_prompt(r["conversations"])
+        prompts.append(p)
+        completions.append(completion_value(r.get("chosen")))
+        labels.append(True)
+        prompts.append(p)
+        completions.append(completion_value(r.get("rejected")))
+        labels.append(False)
+    ds = Dataset.from_dict({
+        "prompt": prompts,
+        "completion": completions,
+        "label": labels,
+    })
+    print(f"[{args.style}] dataset ready: {len(ds)} (desirable={sum(labels)}, undesirable={len(labels)-sum(labels)})", flush=True)
+    print("example prompt:", prompts[0][:120], flush=True)
 
     out_dir = f"{args.out}-{args.style}"
     os.makedirs(out_dir, exist_ok=True)
@@ -143,9 +142,9 @@ def main():
                 if loss is not None:
                     print(f"epoch={self.last_epoch}/{self.total_epochs} train_loss={loss:.6f}", flush=True)
 
-    # 使用 TRL DPOTrainer（trl 1.10 API：DPOConfig 已包含全部训练参数，processing_class 替代 tokenizer）
-    from trl import DPOTrainer, DPOConfig
-    dpo_config = DPOConfig(
+    # 使用 TRL KTOTrainer（trl 1.10 API：KTOConfig 已包含全部训练参数，processing_class 替代 tokenizer）
+    from trl import KTOTrainer, KTOConfig
+    kto_config = KTOConfig(
         output_dir=out_dir,
         per_device_train_batch_size=args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
@@ -165,18 +164,17 @@ def main():
         max_length=args.max_len,
         disable_dropout=True,
     )
-    dpo_trainer = DPOTrainer(
+    kto_trainer = KTOTrainer(
         model=model,
-        ref_model=ref_model,
-        args=dpo_config,
+        args=kto_config,
         train_dataset=ds,
         processing_class=tokenizer,
         callbacks=[EpochSummaryCallback(args.epochs)],
     )
-    dpo_trainer.train()
+    kto_trainer.train()
     model.save_pretrained(out_dir)
     tokenizer.save_pretrained(out_dir)
-    print(f"[{args.style}] DPO DONE -> {out_dir}", flush=True)
+    print(f"[{args.style}] KTO DONE -> {out_dir}", flush=True)
 
 
 if __name__ == "__main__":
