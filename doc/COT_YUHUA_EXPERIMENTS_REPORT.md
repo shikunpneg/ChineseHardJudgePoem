@@ -162,3 +162,51 @@ python scripts/gen_yuhua_batch.py --weight full_sft_yuhua_cot --n 100
 | 余华 CoT 数据 | `dataset/sft_yuhua_cot.jsonl`（522 条） |
 | 余华模型权重 | `out/pretrain_yuhua_768.pth`、`out/full_sft_yuhua_cot_768.pth` |
 | 余华生成样本 | `out/yuhua_samples_cot_v1.jsonl`（100 条） |
+
+---
+
+## 5. dLM / Linear 在余华场景的实证对比（2026-08-18 补充实验）
+
+### 5.1 动机与假设
+
+用户提出：线性注意力（Linear / Gated DeltaNet）的 O(1) 常数记忆与扩散语言模型（dLM）的双向全局建模，是否在**余华长文叙事**场景优于 AR 逐 token 自回归？理论上看：dLM 迭代去噪是全局重写、Linear 有长程记忆，似乎更适合长文。本实验用同一套数据充分预训练 + SFT，同一批提示评测。
+
+### 5.2 实验设置
+
+| 环节 | 设置 |
+|---|---|
+| 数据 | pretrain：`pretrain_yuhua_chat4k.jsonl`（4000 条续写对话，text≥60 字）；SFT：`sft_yuhua_cot.jsonl`（522 条，同一份） |
+| 训练 | 与 AR 相同路径：先 pretrain（warm-start 自 AR 预训练权重），再 SFT；batch 4、lr 1e-4、max_seq_len 512、num_workers 0 |
+| 生成 | `scripts/gen_yuhua_compare.py`：三模型同 15 条提示×各 30 条，同 qualify 过滤，温度 AR 1.0 / dLM 0.7 / Linear 0.6 |
+| 基线 | `full_sft_yuhua_cot`（AR-CoT，此前最优） |
+
+训练产物与 loss：
+
+| 模型 | pretrain loss | SFT loss | 权重 |
+|---|---|---|---|
+| AR-CoT（基线） | 2.35→2.35(pretrain 另行记录) | 3.02→2.04 | `full_sft_yuhua_cot_768.pth` |
+| dLM | 6.1→4.8 | 3.59→2.95（波动，mask_ratio 0.07~0.57） | `dllm_pretrain_yuhua_768.pth` + `dllm_sft_yuhua_768.pth` |
+| Linear | （warm-start 自 AR pretrain） | 2.35→0.88（收敛最好） | `linear_pretrain_yuhua_768.pth` + `full_sft_linear_yuhua_cot_768.pth` |
+
+### 5.3 生成评测结果（各 30 条同提示）
+
+| 指标 | AR-CoT | dLM | Linear |
+|---|---|---|---|
+| 合格通过率 | 100%（30/30） | 42%（30/72，42 条被过滤） | 97%（30/31） |
+| 平均长度 | 202 字 | 248 字 | 214 字 |
+| CoT 结构完整率 | 83% | 100% | 100% |
+| 正文可读性 | ★★★ 有真实人物与场景（许三观/家珍/一乐），但人物串场、句子断裂 | ★ 纯循环重复（"我走出来了，我就出来了，我就不来了"），无叙事推进 | ★★ 有场景与动作推进，但 6/30 含低俗词（屁股/妓女），逻辑混乱 |
+| 生成耗时/条 | ~9s | ~25s（迭代去噪 140 次前向） | ~11s |
+
+### 5.4 结论
+
+**假设不成立：dLM 与 Linear 在余华场景均未优于 AR。**
+
+- **dLM（扩散）**：学会了 CoT 模板与真实书名引用（【构思】承接《活着》…），但正文生成能力明显弱于 AR——迭代重写在小模型上放大重复循环，42% 的样本直接因乱码/循环被过滤。全局建模无法弥补 104M 的叙事容量缺口。
+- **Linear（线性注意力）**：通过率接近 AR（97%），正文有真实场景与动作（"卡车呼呼地来到我家"），但出现 20% 的低俗化内容（训练数据中高采样倾向词被放大）与逻辑混乱，整体不优于 AR。
+- **共同瓶颈是容量而非注意力机制**：三个 104M 模型都只能做"段落生成器"，无法维持长文叙事。AR 的逐 token 生成至少保住短程语法与人物名记忆，在 104M 尺度下仍是三者中正文最可读的。
+- 若要在余华场景取得实质突破，方向仍是**加大容量**（7B LoRA，已有 `shikunpunk/Qwen1.5-7B-Poem-SFT` 经验）或**分段续写 + 大纲约束**，而非替换注意力架构。
+
+对比样本与脚本：
+- `out/yuhua_cmp_ar_v1.jsonl` / `out/yuhua_cmp_dllm_v1.jsonl` / `out/yuhua_cmp_linear_v1.jsonl`
+- `scripts/gen_yuhua_compare.py`、`scripts/eval_yuhua_compare.py`
